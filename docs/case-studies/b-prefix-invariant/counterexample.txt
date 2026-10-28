@@ -1,0 +1,16 @@
+[State]
+- prices = [5, 3, 7] (length 3, all values in range [0, 10000])
+- Before loop: max_pro = 0, min_price = i32::MAX
+- Preconditions satisfied: 1 <= prices.len() <= 100000, all prices in [0, 10000]
+
+[Execution Trace]
+1. Verifier checks invariants hold *before* the first iteration (i = 0).
+2. The invariant being checked: `forall|j: int, k: int| 0 <= j < k < prices.len() ==> prices[k] - prices[j] <= max_pro`.
+3. At i = 0: max_pro = 0, min_price = i32::MAX.
+4. The verifier must establish: for all pairs (j, k) with 0 <= j < k < 3, prices[k] - prices[j] <= 0.
+5. Consider the pair (j=0, k=2): prices[2] - prices[0] = 7 - 5 = 2 > 0 = max_pro.
+6. The invariant claims 2 <= 0, which is false.
+
+[Violation]
+- **Property violated**: `forall|j: int, k: int| 0 <= j < k < prices.len() ==> prices[k] - prices[j] <= max_pro` (the "top-level optimality" invariant).
+- **Why rejected**: Before any iteration has run, max_pro = 0 but there exist pairs of prices with positive difference (e.g., prices[2] - prices[0] = 2). The invariant incorrectly quantifies over the *full array* (0 <= j < k < prices.len()) rather than just the *processed prefix* (0 <= j < k < i). At i=0, no prices have been processed, so claiming the full array's differences are bounded by 0 is false.

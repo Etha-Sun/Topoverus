@@ -1,0 +1,21 @@
+verification results:: 2 verified, 1 errors
+
+note: recommendation not met: value may be out of range of the target type (use `#[verifier::truncate]` on the cast to silence this warning)
+ --> program_422_count_less_than.rs:9:18
+  |
+9 |         count == numbers.len() as u32,
+  |                  ^^^^^^^^^^^^^
+
+error: assertion failed
+  --> program_422_count_less_than.rs:19:16
+   |
+19 |         assert(grow.len() + shrink.len() == numbers.len());
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ assertion failed
+
+note: recommendation not met: value may be out of range of the target type (use `#[verifier::truncate]` on the cast to silence this warning)
+  --> program_422_count_less_than.rs:23:5
+   |
+23 |     grow.len() as u32
+   |     ^^^^^^^^^^
+
+error: aborting due to 1 previous error

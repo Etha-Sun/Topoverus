@@ -1,0 +1,11 @@
+{
+  "verus_mode": "fraction",
+  "dependency_enabled": true,
+  "matcher_version": "v2.0",
+  "matcher_threshold": 0.6,
+  "verus_weight": 1.0,
+  "dependency_weight": 1.0,
+  "format_partial": 0.5,
+  "format_none": 0.2,
+  "timeout_sec": 30
+}

@@ -1,0 +1,104 @@
+{
+  "paper_section": "Appendix B: Qualitative Counterexample Case Studies",
+  "cases": [
+    {
+      "case": "A",
+      "paper_location": "Appendix B, Case Study A, page 15",
+      "problem_id": "Dafnybench/program_422_count_less_than",
+      "benchmark_source": "benchmarks/Dafnybench/unverified/program_422_count_less_than.rs",
+      "review_id": "V2-HCR-054",
+      "sample_id": "exp3v2-010",
+      "historical_model_label": "CTX-New-Dep",
+      "chain": 1,
+      "iteration": 1,
+      "source_record": "test_verl/eval/exp3_v2/human_cex_review/review_items.jsonl",
+      "source_record_selector": {
+        "review_id": "V2-HCR-054"
+      },
+      "assets": {
+        "buggy_code": {
+          "path": "a-assertion-placement/buggy.rs",
+          "sha256": "2e743ead9dacbe3c4386cceda70b6f3e25b07ec868a95ca8cd380712a526a4df"
+        },
+        "verifier_error": {
+          "path": "a-assertion-placement/verifier-error.txt",
+          "sha256": "1f0d9139615879a280962d7147bf0002ce9afab63eef43adabbb923d395e4bc6",
+          "original_sha256": "893c668758a5905f351afcafb2af241b427138cf3a937132f4b6f5fc486e4825",
+          "normalization": "Verifier source paths shortened to the task filename; diagnostics and line numbers retained."
+        },
+        "cex_text": {
+          "path": "a-assertion-placement/counterexample.txt",
+          "sha256": "b976c672f32337d627a5cb933f4bff99b08251c6c9787eaf142df4139d13cfb6"
+        }
+      }
+    },
+    {
+      "case": "B",
+      "paper_location": "Appendix B, Case Study B, page 16",
+      "problem_id": "Leetcode/121-BestTimeSell",
+      "benchmark_source": "benchmarks/Leetcode/verified/121-BestTimeSell.rs",
+      "example_variant": "best_time_sell_v2",
+      "historical_model_name": "step_62_dep-reward-safe",
+      "model_identity_source": "world_model/eval/docs/motivated_example/STEP62_RESULTS_SUMMARY.md",
+      "chain": 1,
+      "iteration": 1,
+      "source_files": {
+        "buggy_code": "world_model/eval/docs/motivated_example/best_time_sell_v2.rs",
+        "prompt": "world_model/eval/docs/motivated_example/best_time_sell_step62/motivated_example/motivated_example/best_time_sell_v2/1/1-prompt.txt",
+        "response": "world_model/eval/docs/motivated_example/best_time_sell_step62/motivated_example/motivated_example/best_time_sell_v2/1/1-output.txt"
+      },
+      "assets": {
+        "buggy_code": {
+          "path": "b-prefix-invariant/buggy.rs",
+          "sha256": "0d589934c6b7eab55bafc20fb46644506a28f0e80257c32fb9c814c22137af1b"
+        },
+        "verifier_error": {
+          "path": "b-prefix-invariant/verifier-error.txt",
+          "sha256": "5a42a3df29fc4a5e76ea54729aa7c4d70e7b951a499a1f60a564b305be15b3ec",
+          "original_sha256": "454c62cd1ef03e8a7f9e98c1cf1f6b743716be2b146a47b789d1a7e9160e7629",
+          "normalization": "Verifier source paths shortened to the task filename; diagnostics and line numbers retained."
+        },
+        "cex_text": {
+          "path": "b-prefix-invariant/counterexample.txt",
+          "sha256": "a69b06186782c174f04ba6668d48d006120c695c6577177cf8398b3963192a37"
+        },
+        "full_response": {
+          "path": "b-prefix-invariant/model-output.txt",
+          "sha256": "8a258bd0554c282053b14bbe5b94d62cc6ec7886fa537d8b73bf065644833a9f"
+        }
+      }
+    },
+    {
+      "case": "C",
+      "paper_location": "Appendix B, Case Study C, page 17",
+      "problem_id": "cleaned-verusbench/task_id_447",
+      "benchmark_source": "benchmarks/cleaned-verusbench/MBPP/unverified/task_id_447.rs",
+      "review_id": "V2-HCR-051",
+      "sample_id": "exp3v2-053",
+      "historical_model_label": "CTX-New-Dep",
+      "chain": 2,
+      "iteration": 1,
+      "source_record": "test_verl/eval/exp3_v2/human_cex_review/review_items.jsonl",
+      "source_record_selector": {
+        "review_id": "V2-HCR-051"
+      },
+      "assets": {
+        "buggy_code": {
+          "path": "c-arithmetic-context/buggy.rs",
+          "sha256": "ab9c45f2a938e186914985573ad73364f80ddd847c7fe2b5b6ed974e9d115248"
+        },
+        "verifier_error": {
+          "path": "c-arithmetic-context/verifier-error.txt",
+          "sha256": "5bc8e0ef202c9dfab5d6b829fbd7d26ef0860bf0d1efa425cce512a843f4d3de",
+          "original_sha256": "624389afc97bd77831d0f6cc24f202b69a3736d0c4ace0c2587f3bd1de0ab22b",
+          "normalization": "Verifier source paths shortened to the task filename; diagnostics and line numbers retained."
+        },
+        "cex_text": {
+          "path": "c-arithmetic-context/counterexample.txt",
+          "sha256": "e3ffe4410aca53ce4533b95ba1da2b3fc08c9c33b05a4071655521d5775b118d"
+        }
+      }
+    }
+  ],
+  "scope": "Historical paper case-study code and counterexamples; verifier paths shortened to filenames. Paper displays condense the original code and counterexample text."
+}

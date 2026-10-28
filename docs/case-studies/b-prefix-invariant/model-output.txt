@@ -1,0 +1,86 @@
+1. <counterexample>
+[State]
+- prices = [5, 3, 7] (length 3, all values in range [0, 10000])
+- Before loop: max_pro = 0, min_price = i32::MAX
+- Preconditions satisfied: 1 <= prices.len() <= 100000, all prices in [0, 10000]
+
+[Execution Trace]
+1. Verifier checks invariants hold *before* the first iteration (i = 0).
+2. The invariant being checked: `forall|j: int, k: int| 0 <= j < k < prices.len() ==> prices[k] - prices[j] <= max_pro`.
+3. At i = 0: max_pro = 0, min_price = i32::MAX.
+4. The verifier must establish: for all pairs (j, k) with 0 <= j < k < 3, prices[k] - prices[j] <= 0.
+5. Consider the pair (j=0, k=2): prices[2] - prices[0] = 7 - 5 = 2 > 0 = max_pro.
+6. The invariant claims 2 <= 0, which is false.
+
+[Violation]
+- **Property violated**: `forall|j: int, k: int| 0 <= j < k < prices.len() ==> prices[k] - prices[j] <= max_pro` (the "top-level optimality" invariant).
+- **Why rejected**: Before any iteration has run, max_pro = 0 but there exist pairs of prices with positive difference (e.g., prices[2] - prices[0] = 2). The invariant incorrectly quantifies over the *full array* (0 <= j < k < prices.len()) rather than just the *processed prefix* (0 <= j < k < i). At i=0, no prices have been processed, so claiming the full array's differences are bounded by 0 is false.
+</counterexample>
+
+2. <reasoning>
+1. **Identify the root cause**: The invariant `forall|j: int, k: int| 0 <= j < k < prices.len() ==> prices[k] - prices[j] <= max_pro` is quantified over the full array `prices.len()` rather than the processed prefix `i`. Before any iteration (i=0), max_pro=0 but there are almost certainly price differences > 0 in the full array.
+
+2. **Fix the quantifier range**: Change the invariant to `forall|j: int, k: int| 0 <= j < k < i ==> prices[k] - prices[j] <= max_pro`. This restricts the claim to only pairs where both indices are less than `i` (i.e., prices already seen/processed). At i=0, this is vacuously true (no such pairs exist).
+
+3. **Why this invariant is maintained**: 
+   - *Base case (i=0)*: No pairs (j,k) with 0 <= j < k < 0 exist, so it's vacuously true.
+   - *Inductive step*: Assume it holds for iteration i (processed indices 0..i). At iteration i+1, we process prices[i]. The new invariant must hold for all pairs (j,k) with 0 <= j < k < i+1. The only new pair is (j, i) for j < i. By the prefix invariant `forall|j: int| 0 <= j < i ==> prices[j] >= min_price`, we have prices[j] >= min_price >= prices[i] (since min_price = min(min_price, prices[i])). So prices[i] - min_price <= 0 <= max_pro (after the max_i32 update). All other pairs were already covered by the inductive hypothesis.
+
+4. **Remove the overly-strong invariant**: The invariant `i == 0 ==> min_price == i32::MAX` is no longer needed once we fix the quantifier — the weaker invariant about min_price being bounded by prices[0..i] is sufficient.
+
+5. **Verify the postcondition**: After the loop, i = prices.len(), so the invariant becomes `forall|j: int, k: int| 0 <= j < k < prices.len() ==> prices[k] - prices[j] <= max_pro`, which is exactly the postcondition. The second postcondition (res > 0 implies existence of a pair achieving max_pro) follows from the invariant `max_pro > 0 ==> exists|j: int, k: int| 0 <= j < k < i && prices[k] - prices[j] == max_pro` (at i = prices.len()).
+</reasoning>
+
+3. ```rust
+use vstd::math::{max, min};
+use vstd::prelude::*;
+
+verus! {
+
+pub fn min_i32(x: i32, y: i32) -> (res: i32)
+    ensures
+        res == min(x as int, y as int),
+{
+    if x < y { x } else { y }
+}
+
+pub fn max_i32(x: i32, y: i32) -> (res: i32)
+    ensures
+        res == max(x as int, y as int),
+{
+    if x < y { y } else { x }
+}
+
+pub fn max_profit(prices: Vec<i32>) -> (res: i32)
+    requires
+        1 <= prices.len() <= 100000,
+        forall|i: int| 0 <= i < prices.len() ==> 0 <= #[trigger] prices[i] <= 10000,
+    ensures
+        forall|j: int, k: int| 0 <= j < k < prices.len() ==> prices[k] - prices[j] <= res,
+        res > 0 ==> exists|j: int, k: int|
+            0 <= j < k < prices.len() && prices[k] - prices[j] == res,
+{
+    let mut max_pro = 0;
+    let mut min_price = i32::MAX;
+
+    for i in 0..prices.len()
+        invariant
+            forall|j: int| 0 <= j < prices.len() ==> 0 <= #[trigger] prices[j] <= 10000,
+            forall|j: int| 0 <= j < i ==> #[trigger] prices[j] >= min_price,
+            i > 0 ==> exists|j: int| 0 <= j < i && #[trigger] prices[j] == min_price,
+            max_pro > 0 ==> exists|j: int, k: int|
+                0 <= j < k < i && prices[k] - prices[j] == max_pro,
+            forall|j: int, k: int| 0 <= j < k < i ==> prices[k] - prices[j] <= max_pro,
+    {
+        min_price = min_i32(min_price, prices[i]);
+        max_pro = max_i32(max_pro, prices[i] - min_price);
+    }
+
+    max_pro
+}
+
+} // verus!
+fn main() {}
+```
+</think>
+```

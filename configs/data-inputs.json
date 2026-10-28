@@ -1,0 +1,22 @@
+{
+  "train": {
+    "filename": "rl_verus_train.jsonl",
+    "sha256": "269cd977f7f57daa2dd70596ce3e0fc5a68f5406833ebad3ea53fd18350eb50e",
+    "rows": 249
+  },
+  "heldout": {
+    "filename": "rl_verus_val.jsonl",
+    "sha256": "fe4f7667146a98b373532ab927b6321611374ccc70209b499b68ff1b30160e09",
+    "rows": 63
+  },
+  "evaluation": {
+    "filename": "main_472_eval.jsonl",
+    "sha256": "5432d054631fa3fca8ac591652b24d1e0a89e20e12d07d75c555b1b8cfa8ca8c",
+    "rows": 472
+  },
+  "sft": {
+    "filename": "qwq_sft_chat_train_v3_ctx_8k.jsonl",
+    "sha256": "f025ab0d9157224a93dbd983ed4d9e4154a8a9655e9b6a1ed0c5ef013424aa82",
+    "rows": 1210
+  }
+}

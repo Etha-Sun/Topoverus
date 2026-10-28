@@ -1,0 +1,24 @@
+# Local model training and evaluation artifacts
+/runs/
+/data/
+/.cache/
+/.venv/
+/.deps/
+/tmp/
+
+# Internal execution state
+/PLAN.md
+/CHECKLIST.md
+
+# Python/build artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+/build/
+/dist/
+
+# Local credentials and overrides
+.env
+.env.*
+!.env.example

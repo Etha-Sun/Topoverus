@@ -1,0 +1,259 @@
+--- a/lynette/src/deghost.rs
++++ b/lynette/src/deghost.rs
+@@ -5,8 +5,62 @@
+ use syn_verus::Token;
+ use syn_verus::TraitItemFn;
+ use syn_verus::parse_quote;
++use syn_verus::visit_mut::{self, VisitMut};
++
++// Keep the context of existing trust calls, including in erased proof code.
++struct FindTrustedCall(bool);
++impl VisitMut for FindTrustedCall {
++    fn visit_expr_mut(&mut self, expr: &mut syn_verus::Expr) {
++        self.0 |= matches!(expr, syn_verus::Expr::Assume(_))
++            || matches!(expr, syn_verus::Expr::Call(c) if trusted_call(c));
++        visit_mut::visit_expr_mut(self, expr);
++    }
++}
++fn trusted_call(call: &syn_verus::ExprCall) -> bool {
++    matches!(&*call.func, syn_verus::Expr::Path(p)
++        if p.path.segments.last().map_or(false, |s| s.ident == "assume" || s.ident == "admit"))
++}
++fn trusted_expr(expr: &syn_verus::Expr) -> bool {
++    let mut visitor = FindTrustedCall(false);
++    visitor.visit_expr_mut(&mut expr.clone());
++    visitor.0
++}
++// Plain assertions add verified obligations; they do not alter trust context.
++// Keep bindings, assignments, guards and assertion proof bodies unchanged.
++struct ErasePlainAssertions;
++impl VisitMut for ErasePlainAssertions {
++    fn visit_block_mut(&mut self, block: &mut syn_verus::Block) {
++        block.stmts.retain(|stmt| !matches!(stmt,
++            syn_verus::Stmt::Expr(syn_verus::Expr::Assert(a), _) if a.body.is_none() && !trusted_expr(&syn_verus::Expr::Assert(a.clone()))));
++        visit_mut::visit_block_mut(self, block);
++    }
++}
++fn trusted_body(block: &syn_verus::Block) -> syn_verus::Block {
++    let mut result = block.clone();
++    ErasePlainAssertions.visit_block_mut(&mut result);
++    result
++}
++
++// Reading a Boolean variable or literal cannot mutate state or panic.
++// Keep calls, arithmetic, indexing and other condition expressions intact.
++fn trivial_condition(expr: &syn_verus::Expr) -> bool {
++    match expr {
++        syn_verus::Expr::Path(p) => p.attrs.is_empty() && p.qself.is_none()
++            && p.path.leading_colon.is_none() && p.path.segments.len() == 1
++            && matches!(p.path.segments[0].arguments, syn_verus::PathArguments::None),
++        syn_verus::Expr::Lit(l) => l.attrs.is_empty() && matches!(l.lit, syn_verus::Lit::Bool(_)),
++        syn_verus::Expr::Paren(p) => p.attrs.is_empty() && trivial_condition(&p.expr),
++        _ => false,
++    }
++}
+ 
+ fn remove_ghost_local(local: &syn_verus::Local, mode: &DeghostMode) -> Option<syn_verus::Local> {
++    // Existing trust can depend on ghost values defined elsewhere in the program.
++    if mode.trusted_ghost_context && (local.ghost.is_some() || local.tracked.is_some()) {
++        let mut result = local.clone();
++        ErasePlainAssertions.visit_local_mut(&mut result);
++        return Some(result);
++    }
+     match local.ghost {
+         Some(_) => None,
+         None => {
+@@ -54,7 +108,33 @@
+     }
+ }
+ 
++fn ghost_context_marker(expr: &syn_verus::Expr) -> syn_verus::Expr {
++    let mut normalized = expr.clone();
++    ErasePlainAssertions.visit_expr_mut(&mut normalized);
++    let context = syn_verus::LitStr::new(
++        &normalized.to_token_stream().to_string(), proc_macro2::Span::call_site());
++    parse_quote! { topoverus_trusted_proof_context(#context) }
++}
++
+ fn remove_ghost_expr(expr: &syn_verus::Expr, mode: &DeghostMode) -> Option<syn_verus::Expr> {
++    if mode.trusted_ghost_context {
++        match expr {
++            // Proof blocks can update values used by a later assumption.
++            syn_verus::Expr::Unary(u) if matches!(u.op, syn_verus::UnOp::Proof(_)) => {
++                let mut normalized = u.expr.as_ref().clone();
++                ErasePlainAssertions.visit_expr_mut(&mut normalized);
++                if matches!(&normalized, syn_verus::Expr::Block(b) if b.block.stmts.is_empty()) {
++                    return None;
++                }
++                return Some(ghost_context_marker(expr));
++            }
++            syn_verus::Expr::Assert(a) if a.body.is_some() || trusted_expr(expr) => {
++                return Some(ghost_context_marker(expr));
++            }
++            syn_verus::Expr::AssertForall(_) => return Some(ghost_context_marker(expr)),
++            _ => {}
++        }
++    }
+     //println!("{}\n", expr.to_token_stream().to_string());
+     match expr {
+         syn_verus::Expr::Block(b) => remove_ghost_block(&b.block, mode).map(|new_block| {
+@@ -67,6 +147,9 @@
+                 },
+             })
+         }),
++        syn_verus::Expr::Call(c) if trusted_call(c) => {
++            if mode.assumes { Some(expr.clone()) } else { None }
++        }
+         syn_verus::Expr::Call(c) => {
+             let new_args: syn_verus::punctuated::Punctuated<syn_verus::Expr, Token![,]> = c
+                 .args
+@@ -161,8 +244,16 @@
+                  * Exists
+                  * Choose
+                  */
+-                syn_verus::UnOp::Proof(_)
+-                | syn_verus::UnOp::Forall(_)
++                syn_verus::UnOp::Proof(_) => {
++                    if mode.assumes && trusted_expr(expr) {
++                        let mut normalized = expr.clone();
++                        ErasePlainAssertions.visit_expr_mut(&mut normalized);
++                        let context = syn_verus::LitStr::new(
++                            &normalized.to_token_stream().to_string(), proc_macro2::Span::call_site());
++                        Some(parse_quote! { topoverus_trusted_proof_context(#context) })
++                    } else { None }
++                }
++                syn_verus::UnOp::Forall(_)
+                 | syn_verus::UnOp::Exists(_)
+                 | syn_verus::UnOp::Choose(_) => None,
+                 _ => Some(expr.clone()),
+@@ -170,6 +261,11 @@
+         }
+         syn_verus::Expr::If(i) => {
+             remove_ghost_block(&i.then_branch, mode).and_then(|new_then_branch| {
++                if i.attrs.is_empty() && i.else_branch.is_none()
++                    && new_then_branch.stmts.is_empty() && trivial_condition(&i.cond)
++                {
++                    return None;
++                }
+                 if let Some((else_token, else_expr)) = i.else_branch.as_ref() {
+                     remove_ghost_expr(&*else_expr, mode).map(|new_else_branch| {
+                         syn_verus::Expr::If(syn_verus::ExprIf {
+@@ -239,8 +335,10 @@
+                 None
+             }
+         }
+-        syn_verus::Expr::Assume(..)
+-        | syn_verus::Expr::AssertForall(..)
++        syn_verus::Expr::Assume(..) => {
++            if mode.assumes { Some(expr.clone()) } else { None }
++        }
++        syn_verus::Expr::AssertForall(..)
+         | syn_verus::Expr::RevealHide(..)
+         | syn_verus::Expr::View(..)
+         | syn_verus::Expr::BigAnd(..)
+@@ -277,10 +375,6 @@
+ pub fn remove_ghost_block(block: &syn_verus::Block, mode: &DeghostMode) -> Option<syn_verus::Block> {
+     let new_stms: Vec<syn_verus::Stmt> =
+         block.stmts.iter().filter_map(|stmt| remove_ghost_stmt(stmt, mode)).collect();
+-
+-    if new_stms.is_empty() {
+-        return None;
+-    }
+ 
+     Some(syn_verus::Block { brace_token: block.brace_token.clone(), stmts: new_stms })
+ }
+@@ -409,6 +503,12 @@
+  */
+ 
+ fn remove_ghost_fn(func: &syn_verus::ItemFn, mode: &DeghostMode) -> Option<syn_verus::ItemFn> {
++    if mode.trusted_ghost_context && matches!(func.sig.mode, syn_verus::FnMode::Proof(_)) {
++        let mut result = func.clone();
++        result.sig.mode = syn_verus::FnMode::Spec(syn_verus::ModeSpec { spec_token: Default::default() });
++        result.block = Box::new(trusted_body(&func.block));
++        return Some(result);
++    }
+     remove_ghost_sig(&func.sig, mode).and_then(|new_sig| {
+         if matches!(new_sig.mode, syn_verus::FnMode::Spec(_) | syn_verus::FnMode::SpecChecked(_)) {
+             Some(func.clone())
+@@ -441,6 +541,12 @@
+             .iter()
+             .filter_map(|it| {
+                 if let syn_verus::ImplItem::Fn(func) = it {
++                    if mode.trusted_ghost_context && matches!(func.sig.mode, syn_verus::FnMode::Proof(_)) {
++                        let mut result = func.clone();
++                        result.sig.mode = syn_verus::FnMode::Spec(syn_verus::ModeSpec { spec_token: Default::default() });
++                        result.block = trusted_body(&func.block);
++                        return Some(syn_verus::ImplItem::Fn(result));
++                    }
+                     remove_ghost_sig(&func.sig, mode).and_then(|new_sig| {
+                         {
+                             if matches!(
+@@ -495,6 +601,12 @@
+                 .iter()
+                 .filter_map(|i| match i {
+                     syn_verus::TraitItem::Fn(func) => {
++                        if mode.trusted_ghost_context && matches!(func.sig.mode, syn_verus::FnMode::Proof(_)) {
++                            let mut result = func.clone();
++                            result.sig.mode = syn_verus::FnMode::Spec(syn_verus::ModeSpec { spec_token: Default::default() });
++                            result.default = func.default.as_ref().map(trusted_body);
++                            return Some(syn_verus::TraitItem::Fn(result));
++                        }
+                         Some(syn_verus::TraitItem::Fn(TraitItemFn {
+                             attrs: func.attrs.clone(),
+                             sig: remove_ghost_sig(&func.sig, mode)?,
+@@ -595,9 +707,16 @@
+     let pure_file = remove_verus_macro(&orig_file);
+ 
+     extract_verus_macro(&orig_file).and_then(|verus_macros| {
++        let mut mode = mode.clone();
++        if mode.assumes {
++            let mut visitor = FindTrustedCall(false);
++            visitor.visit_file_mut(&mut orig_file.clone());
++            for vm in &verus_macros { visitor.visit_file_mut(&mut vm.clone()); }
++            mode.trusted_ghost_context = visitor.0;
++        }
+         let mut verus_files: Vec<syn_verus::File> = Vec::new();
+         for vm in verus_macros {
+-            let new_verus_file = remove_ghost_from_file(&vm, mode);
++            let new_verus_file = remove_ghost_from_file(&vm, &mode);
+ 
+             let mut new_verus_ts = TokenStream::new();
+ 
+--- a/lynette/src/main.rs
++++ b/lynette/src/main.rs
+@@ -183,6 +183,8 @@
+     decreases: bool,
+     #[clap(long, help = "Compare assumes")]
+     assumes: bool,
++    #[clap(skip)]
++    trusted_ghost_context: bool,
+ }
+ 
+ impl DeghostMode {
+@@ -195,6 +197,7 @@
+         self.asserts_anno = other.asserts_anno;
+         self.decreases = other.decreases;
+         self.assumes = other.assumes;
++        self.trusted_ghost_context = other.trusted_ghost_context;
+     }
+ }
+ 
+@@ -214,6 +217,7 @@
+             asserts_anno: false,
+             decreases: false,
+             assumes: false,
++            trusted_ghost_context: false,
+         }
+     }
+ }
+@@ -500,6 +504,10 @@
+ }
+ 
+ fn main() {
++    if std::env::args().nth(1).as_deref() == Some("--topoverus-safety-version") {
++        println!("topoverus-trusted-ghost-context-v4");
++        return;
++    }
+     let args = Cli::parse();
+ 
+     match args.command {

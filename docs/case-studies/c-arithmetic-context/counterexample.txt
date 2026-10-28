@@ -1,0 +1,21 @@
+[State]
+- Input: `nums = vec![10, 20, 30]`
+- At the start of the while loop iteration where `i = 0`:
+  - `nums.len() = 3`
+  - `i = 0`
+  - `cubed_array.len() = 0`
+  - Precondition holds: all values satisfy the arithmetic bounds
+  - Loop invariant holds: `i <= nums.len()` (0 <= 3), `cubed_array.len() == i` (0 == 0), and the forall over an empty range
+
+[Execution Trace]
+1. Enter `while i < nums.len()` with `i = 0`, `nums.len() = 3`. Verus checks: invariant holds (0 <= 3, 0 == 0, forall vacuously true). OK.
+2. Execute `cubed_array.push(nums[i] * nums[i] * nums[i])` → `nums[0] = 10`, so computes `10 * 10 * 10 = 1000`.
+3. Verus needs to verify no arithmetic overflow occurs at `nums[i] * nums[i] * nums[i]`.
+4. The precondition states: `forall|k: int| 0 <= k < nums.len() ==> i32::MIN <= nums[k]*nums[k] <= i32::MAX` and similarly for the cube. But this precondition is only available in the function's `requires` — it is NOT propagated into the while loop's invariant.
+5. Inside the loop, the only available facts are the stated invariants: `i <= nums.len()`, `cubed_array.len() == i`, and the forall about `cubed_array[k]`. None of these invariants mention the arithmetic bounds on `nums[k]`.
+6. Verus cannot connect the index `i` (which satisfies `0 <= i < nums.len()` from the loop condition) to the precondition `forall|k: int| 0 <= k < nums.len() ==> i32::MIN <= nums[k]*nums[k]*nums[k] <= i32::MAX` because the precondition is not listed in the loop invariant.
+7. Without the arithmetic bounds in the invariant, Verus conservatively reports "possible arithmetic underflow/overflow" at each multiplication site `nums[i] * nums[i]` and `nums[i] * nums[i] * nums[i]`.
+
+[Violation]
+- **Property violated**: Arithmetic safety — Verus reports "possible arithmetic underflow/overflow" at `nums[i] * nums[i] * nums[i]` on line 40.
+- **Why**: The function's `requires` clauses establish that `nums[k] * nums[k] * nums[k]` is within `i32::MIN..=i32::MAX` for all valid indices `k`. However, these preconditions are NOT included in the `while` loop's `invariant` block. Inside the loop, Verus only has access to the invariants explicitly listed — `i <= nums.len()`, `cubed_array.len() == i`, and the forall about `cubed_array[k]`. Without the arithmetic bounds invariant, the prover cannot confirm that `nums[i] * nums[i] * nums[i]` won't overflow `i32`, even though the precondition logically guarantees it.
