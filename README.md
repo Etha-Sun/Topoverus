@@ -158,13 +158,7 @@ checker with `scripts/prepare_safety_tool.py`.
 
 ## Citation
 
-```bibtex
-@misc{sun2026topoverus,
-  title  = {Curriculum Proof Repair with Learned Counterexamples},
-  author = {Yuechun Sun and Jun Yang and Kexin Pei},
-  year   = {2026}
-}
-```
+Coming soon
 
 ## License
 
